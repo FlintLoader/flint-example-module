@@ -1,21 +1,37 @@
+import xyz.wagyourtail.unimined.internal.minecraft.MinecraftProvider
+import xyz.wagyourtail.unimined.minecraft.patch.flint.FlintLoaderMinecraftTransformer
+
 plugins {
     id 'java'
     id 'maven-publish'
-    id 'flint-steel' version '0.1.0'
+    id "xyz.wagyourtail.unimined"
 }
 
 group = "${group}"
 version = "${version_major}.${version_minor}.${version_patch}"
+
+unimined.minecraft {
+    version minecraft_version
+
+    mappings {
+        mojmap()
+    }
+
+    customPatcher(new FlintLoaderMinecraftTransformer(project, delegate as MinecraftProvider)) {
+        it.loader(flint_version)
+    }
+}
+
+remapJar {
+    prodNamespace "intermediary"
+}
 
 repositories {
     mavenCentral()
 }
 
 dependencies {
-    minecraft "com.mojang:minecraft:$project.minecraft_version"
-    mappings steel.officialMojangMappings()
-    modImplementation "net.flintloader:punch:${flint_version}"
-    modImplementation "net.flintloader:flint-api:${flint_api}"
+   modImplementation "net.flintloader:flint-api:${flint_api}"
 }
 
 processResources {

@@ -8,6 +8,9 @@ pluginManagement {
             url = "https://maven.flintloader.net/mirror"
             name = "Flint Mirror"
         }
+        maven {
+            url = "https://mcentral.firstdark.dev/releases"
+        }
         gradlePluginPortal()
     }
 }
