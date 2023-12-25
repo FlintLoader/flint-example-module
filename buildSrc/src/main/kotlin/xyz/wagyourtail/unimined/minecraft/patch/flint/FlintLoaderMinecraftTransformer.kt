@@ -6,12 +6,17 @@ import org.gradle.api.Project
 import org.gradle.api.artifacts.Dependency
 import xyz.wagyourtail.unimined.api.minecraft.EnvType
 import xyz.wagyourtail.unimined.api.runs.RunConfig
+import xyz.wagyourtail.unimined.api.task.RemapJarTask
 import xyz.wagyourtail.unimined.internal.minecraft.MinecraftProvider
 import xyz.wagyourtail.unimined.internal.minecraft.patch.MinecraftJar
 import xyz.wagyourtail.unimined.internal.minecraft.patch.fabric.FabricLikeMinecraftTransformer
+import xyz.wagyourtail.unimined.util.openZipFileSystem
 import java.io.InputStreamReader
 import java.net.URI
 import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.StandardOpenOption
+import kotlin.io.path.exists
 
 class FlintLoaderMinecraftTransformer(
         project: Project,
@@ -33,7 +38,7 @@ class FlintLoaderMinecraftTransformer(
     }
 
     init {
-        provider.side = EnvType.CLIENT;
+        provider.side = EnvType.CLIENT
     }
 
     override fun addIntermediaryMappings() {
@@ -81,10 +86,10 @@ class FlintLoaderMinecraftTransformer(
     }
 
     override fun applyExtraLaunches() {
-        super.applyExtraLaunches()
-        if (provider.side == EnvType.SERVER) {
-            throw RuntimeException("Flint Loader does not support Server Sided installs")
+        if (provider.side != EnvType.CLIENT) {
+            throw RuntimeException("Flint only supports client. Current side is ${provider.side}")
         }
+        super.applyExtraLaunches()
     }
 
     override fun applyClientRunTransform(config: RunConfig) {
@@ -94,5 +99,36 @@ class FlintLoaderMinecraftTransformer(
                 "-Dflint.remapClasspathFile=${intermediaryClasspath}",
                 "-Dflint.classPathGroups=${groups}"
         )
+    }
+
+    override fun merge(clientjar: MinecraftJar, serverjar: MinecraftJar): MinecraftJar {
+        throw RuntimeException("Merging is not supported on flint")
+    }
+
+    override fun afterRemapJarTask(remapJarTask: RemapJarTask, output: Path) {
+        this.insertAccessWidener(output)
+    }
+
+    private fun insertAccessWidener(output: Path) {
+        if (accessWidener != null) {
+            output.openZipFileSystem(mapOf("mutable" to true)).use { fs ->
+                val mod = fs.getPath(modJsonName)
+                if (!Files.exists(mod)) {
+                    throw IllegalStateException("$modJsonName not found in jar")
+                }
+                val aw = accessWidener!!.toPath()
+                var parent = aw.parent
+                while (!fs.getPath(parent.relativize(aw).toString()).exists()) {
+                    parent = parent.parent
+                    if (parent.relativize(aw).toString() == aw.toString()) {
+                        throw IllegalStateException("Access widener not found in jar")
+                    }
+                }
+                val awPath = fs.getPath(parent.relativize(aw).toString())
+                val json = JsonParser.parseReader(InputStreamReader(Files.newInputStream(mod))).asJsonObject
+                json.addProperty(accessWidenerJsonKey, awPath.toString())
+                Files.write(mod, GSON.toJson(json).toByteArray(), StandardOpenOption.TRUNCATE_EXISTING)
+            }
+        }
     }
 }
